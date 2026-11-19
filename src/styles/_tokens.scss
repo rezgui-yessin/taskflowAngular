@@ -1,0 +1,55 @@
+// Design tokens: colors, radius, shadows. Light is default, dark via [data-theme='dark'].
+:root {
+  --font: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+
+  --accent: #6366f1;
+  --accent-soft: color-mix(in srgb, var(--accent) 12%, transparent);
+  --accent-mid: color-mix(in srgb, var(--accent) 24%, transparent);
+  --accent-strong: color-mix(in srgb, var(--accent) 86%, black);
+  --accent-ring: color-mix(in srgb, var(--accent) 38%, transparent);
+
+  --success: #10b981;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+  --info: #0ea5e9;
+
+  --bg: #f5f6fa;
+  --surface: #ffffff;
+  --surface-2: #f1f3f9;
+  --surface-3: #e8ebf3;
+  --border: #e5e8f0;
+  --text: #0f172a;
+  --text-2: #475569;
+  --text-3: #8591a6;
+
+  --radius-sm: 8px;
+  --radius: 14px;
+  --radius-lg: 20px;
+  --radius-pill: 999px;
+
+  --shadow-sm: 0 1px 2px rgb(15 23 42 / 6%);
+  --shadow: 0 6px 20px rgb(15 23 42 / 6%), 0 1px 3px rgb(15 23 42 / 5%);
+  --shadow-lg: 0 30px 70px rgb(15 23 42 / 25%);
+
+  --sidebar-w: 256px;
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  color-scheme: light;
+}
+
+:root[data-theme='dark'] {
+  --bg: #0b0d13;
+  --surface: #131722;
+  --surface-2: #1a1f2d;
+  --surface-3: #232a3b;
+  --border: #252b3b;
+  --text: #e9ecf5;
+  --text-2: #a3abc1;
+  --text-3: #6c7691;
+
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 40%);
+  --shadow: 0 8px 28px rgb(0 0 0 / 35%), 0 1px 3px rgb(0 0 0 / 30%);
+  --shadow-lg: 0 30px 80px rgb(0 0 0 / 60%);
+
+  color-scheme: dark;
+}

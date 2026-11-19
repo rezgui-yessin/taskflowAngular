@@ -1,0 +1,26 @@
+.rings { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+.ring-card { display: flex; align-items: center; gap: 18px; }
+.small { font-size: .82rem; margin-top: 2px; }
+.streak { background: linear-gradient(135deg, color-mix(in srgb, var(--warning) 14%, var(--surface)), var(--surface)); }
+.flame { display: grid; place-items: center; width: 64px; height: 64px; border-radius: 20px; color: #fff; background: linear-gradient(135deg, #fbbf24, #f97316); box-shadow: 0 10px 24px rgb(249 115 22 / 35%); flex: none; }
+
+.chart { display: grid; grid-template-columns: 44px 1fr; gap: 8px; height: 320px; }
+.y { position: relative; margin: 24px 0 48px; font-size: .72rem; color: var(--text-3); text-align: right; span { position: absolute; right: 0; transform: translateY(-50%); } }
+.plot { position: relative; }
+.gl { position: absolute; left: 0; right: 0; border-top: 1px dashed var(--border); }
+.g1 { top: 24px; } .g2 { top: calc(24px + (100% - 72px) / 2); }
+.bars { position: absolute; inset: 0; display: grid; gap: 14px; }
+.bar-col { display: flex; flex-direction: column; align-items: center; min-width: 0; }
+.bar-val { height: 24px; font-size: .74rem; font-weight: 700; color: var(--text-2); }
+.bar-track { flex: 1; width: min(48px, 70%); display: flex; align-items: flex-end; border-bottom: 1px solid var(--border); }
+.bar { width: 100%; min-height: 4px; border-radius: 10px 10px 4px 4px; background: color-mix(in srgb, var(--accent) 40%, var(--surface-3)); transition: height .7s var(--ease);
+  &.cur { background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 70%, white), var(--accent)); box-shadow: 0 6px 16px var(--accent-ring); } }
+.bar-label { margin-top: 6px; height: 22px; line-height: 22px; font-size: .78rem; font-weight: 650; color: var(--text-2); &.cur { color: var(--accent); } }
+.bar-sub { height: 20px; font-size: .72rem; color: var(--text-3); }
+
+.cats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px 32px; }
+.cat-top { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: .9rem; }
+.meter { height: 8px; border-radius: 8px; background: var(--surface-3); overflow: hidden; i { display: block; height: 100%; border-radius: 8px; background: var(--accent); transition: width .7s var(--ease); } }
+
+@media (max-width: 1080px) { .rings { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 640px) { .rings { grid-template-columns: 1fr; } .cats { grid-template-columns: 1fr; } .chart { height: 280px; } .bars { gap: 6px; } }

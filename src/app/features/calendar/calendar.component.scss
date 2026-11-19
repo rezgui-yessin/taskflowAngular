@@ -1,0 +1,31 @@
+.controls { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.nav { display: flex; align-items: center; gap: 4px; }
+.layout { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; align-items: start; }
+.cal { padding: 12px; }
+.weekdays { display: grid; grid-template-columns: repeat(7, 1fr); padding: 6px 0 10px; text-align: center; font-size: .74rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--text-3); }
+.grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+.cell { position: relative; min-height: 104px; padding: 8px; border-radius: 14px; background: var(--surface-2); border: 1px solid transparent; cursor: pointer; overflow: hidden; transition: border-color .15s, background .15s;
+  &:hover { border-color: var(--accent-mid); }
+  &.out { opacity: .42; }
+  &.sel { border-color: var(--accent); background: var(--accent-soft); }
+  &.today .num span { background: var(--accent); color: #fff; } }
+.grid.week .cell { min-height: 320px; }
+.num { display: flex; margin-bottom: 6px; span { display: grid; place-items: center; min-width: 26px; height: 26px; padding: 0 6px; border-radius: 99px; font-size: .82rem; font-weight: 700; } }
+.chips { display: flex; flex-direction: column; gap: 3px; }
+.chip { font-size: .72rem; font-weight: 600; padding: 2px 7px; border-radius: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-left: 3px solid var(--text-3); background: var(--surface);
+  &[data-p='high'] { border-color: var(--danger); } &[data-p='medium'] { border-color: var(--warning); } &[data-p='low'] { border-color: var(--success); }
+  &.done { text-decoration: line-through; opacity: .55; } }
+.more { font-size: .7rem; color: var(--text-3); font-weight: 650; padding-left: 4px; }
+.dots { display: none; }
+
+.agenda { position: sticky; top: 76px; }
+.agenda .eyebrow { margin: 0; }
+.hint { margin-top: 12px; font-size: .78rem; }
+
+@media (max-width: 1000px) { .layout { grid-template-columns: minmax(0, 1fr); } .agenda { position: static; } }
+@media (max-width: 640px) {
+  .cal { padding: 8px; } .grid { gap: 3px; }
+  .cell { min-height: 54px; padding: 4px; text-align: center; .chips { display: none; } .num { justify-content: center; } }
+  .grid.week .cell { min-height: 90px; }
+  .dots { display: flex; justify-content: center; i { font-style: normal; font-size: .62rem; font-weight: 700; min-width: 18px; padding: 0 5px; border-radius: 99px; background: var(--accent); color: #fff; } }
+}

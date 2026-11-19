@@ -1,0 +1,93 @@
+<div class="app">
+  <aside class="sidebar">
+    <a class="brand" routerLink="/dashboard">
+      <span class="logo"><app-icon name="check" [size]="18" [stroke]="3.5" /></span>
+      <span>TaskFlow</span>
+    </a>
+
+    <button class="btn btn-primary new" (click)="form.openNew()">
+      <app-icon name="plus" [size]="18" [stroke]="2.5" /> New task <kbd>N</kbd>
+    </button>
+
+    <nav aria-label="Main">
+      @for (n of nav; track n.path) {
+        <a class="nav-link" [routerLink]="n.path" routerLinkActive="active">
+          <app-icon [name]="n.icon" [size]="19" />
+          <span>{{ n.label }}</span>
+          @if (n.path === '/tasks' && openCount() > 0) { <span class="pill">{{ openCount() }}</span> }
+        </a>
+      }
+    </nav>
+
+    <div class="side-foot">
+      <div class="sync" [class.live]="realtime.connected()">
+        <span class="pulse"></span>
+        {{ realtime.connected() ? 'Live sync on' : 'Offline' }}
+      </div>
+    </div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <div class="today">
+        <div class="eyebrow">Today</div>
+        <strong>{{ store.today() | date: 'EEEE, d MMMM' }}</strong>
+      </div>
+      <div class="tools">
+        <a class="btn btn-icon only-mobile" routerLink="/settings" routerLinkActive="active" aria-label="Settings"><app-icon name="settings" /></a>
+        <button class="btn btn-icon" (click)="settings.toggleTheme()" [attr.aria-label]="isDark() ? 'Switch to light theme' : 'Switch to dark theme'">
+          <app-icon [name]="isDark() ? 'sun' : 'moon'" />
+        </button>
+
+        <div class="bell-wrap">
+          <button class="btn btn-icon bell" (click)="toggleBell()" aria-label="Notifications" [attr.aria-expanded]="bellOpen()">
+            <app-icon name="bell" />
+            @if (reminders.unread() > 0) { <span class="badge-dot">{{ reminders.unread() }}</span> }
+          </button>
+
+          @if (bellOpen()) {
+            <div class="panel" role="dialog" aria-label="Notifications">
+              <div class="panel-head">
+                <strong>Reminders</strong>
+                @if (reminders.inbox().length) { <button class="btn btn-sm btn-ghost" (click)="reminders.clearInbox()">Clear all</button> }
+              </div>
+              <div class="panel-body">
+                @for (n of reminders.inbox(); track n.id) {
+                  <div class="note" [class.unread]="!n.read">
+                    <span class="note-ic"><app-icon name="bell" [size]="14" /></span>
+                    <div>
+                      <div class="note-t">{{ n.title }}</div>
+                      <div class="note-b">{{ n.body }}</div>
+                      <div class="note-time">{{ n.at | date: 'EEE d MMM, HH:mm' }}</div>
+                    </div>
+                  </div>
+                } @empty {
+                  <div class="empty">
+                    <div class="empty-ic"><app-icon name="bell" /></div>
+                    <strong>No reminders yet</strong>
+                    <span>Tasks with a reminder will show up here.</span>
+                  </div>
+                }
+              </div>
+            </div>
+          }
+        </div>
+      </div>
+    </header>
+
+    <main class="content"><router-outlet /></main>
+  </div>
+
+  <nav class="mobile-nav" aria-label="Main">
+    @for (n of nav.slice(0, 2); track n.path) {
+      <a [routerLink]="n.path" routerLinkActive="active"><app-icon [name]="n.icon" /><span>{{ n.label }}</span></a>
+    }
+    <button class="fab" (click)="form.openNew()" aria-label="New task"><app-icon name="plus" [size]="24" [stroke]="2.5" /></button>
+    @for (n of nav.slice(2, 4); track n.path) {
+      <a [routerLink]="n.path" routerLinkActive="active"><app-icon [name]="n.icon" /><span>{{ n.label }}</span></a>
+    }
+  </nav>
+</div>
+
+<app-task-dialog />
+<app-toast-host />

@@ -1,0 +1,10 @@
+.narrow { max-width: 760px; }
+.card h2 { margin-bottom: 6px; }
+.row { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 16px 0; border-top: 1px solid var(--border); &:first-of-type { margin-top: 8px; } p { font-size: .85rem; margin-top: 2px; } }
+.swatches { display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+.swatch { width: 32px; height: 32px; border-radius: 50%; border: 3px solid var(--surface); box-shadow: 0 0 0 1px var(--border); cursor: pointer; display: grid; place-items: center; color: #fff; transition: transform .15s;
+  &:hover { transform: scale(1.12); } &.on { box-shadow: 0 0 0 2px var(--text); } }
+.switch:disabled { opacity: .45; cursor: not-allowed; }
+.pad { margin: 4px 0 14px; }
+.btns { display: flex; gap: 10px; flex-wrap: wrap; }
+@media (max-width: 560px) { .row { flex-direction: column; align-items: flex-start; } .swatches { justify-content: flex-start; } }
