@@ -1,5 +1,5 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
-import { NewTask, Period, Status, Task } from '../models/task.model';
+import { Habit, NewTask, Period, Status, Tag, Task, TaskTemplate } from '../models/task.model';
 import { RealtimeService } from './realtime.service';
 import {
   addDays,
@@ -13,6 +13,9 @@ import {
 } from '../utils/date.utils';
 
 const KEY = 'taskflow.tasks.v1';
+const TAGS_KEY = 'taskflow.tags.v1';
+const TEMPLATES_KEY = 'taskflow.templates.v1';
+const HABITS_KEY = 'taskflow.habits.v1';
 
 @Injectable({ providedIn: 'root' })
 export class TaskStore {
@@ -20,10 +23,16 @@ export class TaskStore {
 
   private readonly _tasks = signal<Task[]>(this.load());
   private readonly _today = signal(toISO(new Date()));
+  private readonly _tags = signal<Tag[]>(this.loadTags());
+  private readonly _templates = signal<TaskTemplate[]>(this.loadTemplates());
+  private readonly _habits = signal<Habit[]>(this.loadHabits());
 
   readonly tasks = this._tasks.asReadonly();
   /** Today's date (YYYY-MM-DD). Rolls over automatically at midnight. */
   readonly today = this._today.asReadonly();
+  readonly tags = this._tags.asReadonly();
+  readonly templates = this._templates.asReadonly();
+  readonly habits = this._habits.asReadonly();
 
   readonly open = computed(() => this._tasks().filter((t) => t.status !== 'done'));
   readonly overdue = computed(() =>
@@ -40,7 +49,6 @@ export class TaskStore {
     }
 
     // Changes made in another tab/window (or later: pushed by the server) replace our copy.
-    // The sender already saved them, so we only update the signal: no echo, no loops.
     this.realtime.on<Task[]>('tasks', (tasks) => this._tasks.set(tasks));
     // Fallback for browsers without BroadcastChannel.
     addEventListener('storage', (e) => {
@@ -82,6 +90,20 @@ export class TaskStore {
     }
   }
 
+  /** Returns true if the task is blocked (at least one dependency is not done). */
+  isBlocked(task: Task): boolean {
+    if (!task.dependsOn?.length) return false;
+    return task.dependsOn.some((depId) => {
+      const dep = this.byId(depId);
+      return dep && dep.status !== 'done';
+    });
+  }
+
+  /** Tags for a given task */
+  tagsFor(task: Task): Tag[] {
+    return (task.tagIds ?? []).map((id) => this._tags().find((t) => t.id === id)).filter(Boolean) as Tag[];
+  }
+
   // ---------- commands ----------
 
   add(input: NewTask): Task {
@@ -98,6 +120,9 @@ export class TaskStore {
       dueTime: input.dueTime ?? null,
       reminderMinutes: input.reminderMinutes ?? null,
       subtasks: input.subtasks ?? [],
+      tagIds: input.tagIds ?? [],
+      dependsOn: input.dependsOn ?? [],
+      timeSpentMinutes: input.timeSpentMinutes ?? 0,
       createdAt: now.toISOString(),
       completedAt: input.status === 'done' ? now.toISOString() : null,
       nextSpawned: false,
@@ -111,10 +136,26 @@ export class TaskStore {
     this.mutate((list) => list.map((t) => (t.id === id ? { ...t, ...patch, updatedAt: Date.now() } : t)));
   }
 
+  /** Add tracked focus/time to a task */
+  logTime(id: string, minutes: number): void {
+    const task = this.byId(id);
+    if (!task) return;
+    const current = task.timeSpentMinutes ?? 0;
+    this.update(id, { timeSpentMinutes: Math.max(0, current + minutes) });
+  }
+
   remove(id: string): Task | undefined {
     const removed = this.byId(id);
     this.mutate((list) => list.filter((t) => t.id !== id));
     return removed;
+  }
+
+  /** Removes multiple tasks at once */
+  removeMany(ids: string[]): number {
+    const set = new Set(ids);
+    const before = this._tasks().length;
+    this.mutate((list) => list.filter((t) => !set.has(t.id)));
+    return before - this._tasks().length;
   }
 
   /** Brings back a task removed by mistake (used by the "Undo" toast). */
@@ -147,8 +188,15 @@ export class TaskStore {
         dueTime: task.dueTime,
         reminderMinutes: task.reminderMinutes,
         subtasks: task.subtasks.map((s) => ({ ...s, id: crypto.randomUUID(), done: false })),
+        tagIds: [...(task.tagIds ?? [])],
+        dependsOn: [],
       });
     }
+  }
+
+  /** Set status for multiple tasks */
+  setStatusMany(ids: string[], status: Status): void {
+    ids.forEach((id) => this.setStatus(id, status));
   }
 
   toggleDone(id: string): void {
@@ -180,6 +228,70 @@ export class TaskStore {
     return count;
   }
 
+  // ---------- tags ----------
+
+  addTag(label: string, color: string): Tag {
+    const tag: Tag = { id: crypto.randomUUID(), label: label.trim(), color };
+    this._tags.update((list) => [...list, tag]);
+    this.saveTags();
+    return tag;
+  }
+
+  updateTag(id: string, patch: Partial<Tag>): void {
+    this._tags.update((list) => list.map((t) => (t.id === id ? { ...t, ...patch } : t)));
+    this.saveTags();
+  }
+
+  removeTag(id: string): void {
+    this._tags.update((list) => list.filter((t) => t.id !== id));
+    // Remove tag from all tasks
+    this.mutate((list) =>
+      list.map((t) => ({ ...t, tagIds: (t.tagIds ?? []).filter((tid) => tid !== id) }))
+    );
+    this.saveTags();
+  }
+
+  // ---------- templates ----------
+
+  saveTemplate(name: string, task: Task): TaskTemplate {
+    const template: TaskTemplate = {
+      id: crypto.randomUUID(),
+      name: name.trim(),
+      data: {
+        title: task.title,
+        notes: task.notes,
+        priority: task.priority,
+        repeat: task.repeat,
+        category: task.category,
+        dueTime: task.dueTime,
+        reminderMinutes: task.reminderMinutes,
+        subtasks: task.subtasks.map((s) => ({ ...s, id: crypto.randomUUID(), done: false })),
+        tagIds: [...(task.tagIds ?? [])],
+        dependsOn: [],
+      },
+      createdAt: new Date().toISOString(),
+    };
+    this._templates.update((list) => [template, ...list]);
+    this.saveTemplates();
+    return template;
+  }
+
+  removeTemplate(id: string): void {
+    this._templates.update((list) => list.filter((t) => t.id !== id));
+    this.saveTemplates();
+  }
+
+  applyTemplate(template: TaskTemplate, dueDate?: string): NewTask {
+    return {
+      ...template.data,
+      title: template.data.title ?? 'Task from template',
+      dueDate: dueDate ?? this._today(),
+      subtasks: (template.data.subtasks ?? []).map((s) => ({ ...s, id: crypto.randomUUID(), done: false })),
+    };
+  }
+
+  // ---------- write path ----------
+
   /** Single write path: update the signal, save immediately, tell other tabs/devices. */
   private mutate(fn: (list: Task[]) => Task[]): void {
     const next = fn(this._tasks());
@@ -190,6 +302,14 @@ export class TaskStore {
       /* storage full or unavailable: keep working in memory */
     }
     this.realtime.emit('tasks', next);
+  }
+
+  private saveTags(): void {
+    try { localStorage.setItem(TAGS_KEY, JSON.stringify(this._tags())); } catch { /* ignore */ }
+  }
+
+  private saveTemplates(): void {
+    try { localStorage.setItem(TEMPLATES_KEY, JSON.stringify(this._templates())); } catch { /* ignore */ }
   }
 
   // ---------- demo data ----------
@@ -213,6 +333,9 @@ export class TaskStore {
       dueTime: null,
       reminderMinutes: null,
       subtasks: [],
+      tagIds: [],
+      dependsOn: [],
+      timeSpentMinutes: 0,
       createdAt: new Date().toISOString(),
       completedAt: null,
       nextSpawned: false,
@@ -249,10 +372,140 @@ export class TaskStore {
   private load(): Task[] {
     try {
       const raw = localStorage.getItem(KEY);
-      return raw ? (JSON.parse(raw) as Task[]) : [];
+      if (!raw) return [];
+      const tasks = JSON.parse(raw) as Task[];
+      // Migrate old tasks missing new fields
+      return tasks.map((t) => ({
+        ...t,
+        tagIds: t.tagIds ?? [],
+        dependsOn: t.dependsOn ?? [],
+        timeSpentMinutes: t.timeSpentMinutes ?? (t.status === 'done' ? 30 : 0),
+      }));
     } catch {
       return [];
     }
+  }
+
+  private loadTags(): Tag[] {
+    try {
+      const raw = localStorage.getItem(TAGS_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch { return []; }
+  }
+
+  private loadTemplates(): TaskTemplate[] {
+    try {
+      const raw = localStorage.getItem(TEMPLATES_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch { return []; }
+  }
+
+  // ---------- habits ----------
+
+  addHabit(title: string, category: string, color: string, targetDaysPerWeek = 7): Habit {
+    const habit: Habit = {
+      id: crypto.randomUUID(),
+      title: title.trim(),
+      category: category || 'Personal',
+      color: color || '#6366f1',
+      targetDaysPerWeek,
+      completedDates: [],
+      createdAt: new Date().toISOString(),
+    };
+    this._habits.update((list) => [...list, habit]);
+    this.saveHabits();
+    return habit;
+  }
+
+  removeHabit(id: string): void {
+    this._habits.update((list) => list.filter((h) => h.id !== id));
+    this.saveHabits();
+  }
+
+  toggleHabitDay(id: string, isoDate: string): void {
+    this._habits.update((list) =>
+      list.map((h) => {
+        if (h.id !== id) return h;
+        const exists = h.completedDates.includes(isoDate);
+        const completedDates = exists
+          ? h.completedDates.filter((d) => d !== isoDate)
+          : [...h.completedDates, isoDate];
+        return { ...h, completedDates };
+      })
+    );
+    this.saveHabits();
+  }
+
+  habitStreak(habit: Habit): number {
+    const set = new Set(habit.completedDates);
+    let cursor = fromISO(this._today());
+    const todayStr = toISO(cursor);
+    if (!set.has(todayStr)) {
+      cursor = addDays(cursor, -1);
+    }
+    let streak = 0;
+    while (set.has(toISO(cursor))) {
+      streak++;
+      cursor = addDays(cursor, -1);
+    }
+    return streak;
+  }
+
+  private saveHabits(): void {
+    try { localStorage.setItem(HABITS_KEY, JSON.stringify(this._habits())); } catch { /* ignore */ }
+  }
+
+  private loadHabits(): Habit[] {
+    try {
+      const raw = localStorage.getItem(HABITS_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch { /* ignore */ }
+    return this.seedHabits();
+  }
+
+  private seedHabits(): Habit[] {
+    const today = new Date();
+    const d = (n: number) => toISO(addDays(today, n));
+    const sample: Habit[] = [
+      {
+        id: crypto.randomUUID(),
+        title: 'Drink 2L Water',
+        category: 'Health',
+        color: '#06b6d4',
+        targetDaysPerWeek: 7,
+        completedDates: [d(0), d(-1), d(-2), d(-3)],
+        createdAt: new Date().toISOString(),
+      },
+      {
+        id: crypto.randomUUID(),
+        title: 'Read 20 minutes',
+        category: 'Learning',
+        color: '#8b5cf6',
+        targetDaysPerWeek: 5,
+        completedDates: [d(0), d(-1), d(-2)],
+        createdAt: new Date().toISOString(),
+      },
+      {
+        id: crypto.randomUUID(),
+        title: 'Morning Workout / Stretch',
+        category: 'Health',
+        color: '#10b981',
+        targetDaysPerWeek: 6,
+        completedDates: [d(0), d(-1), d(-3)],
+        createdAt: new Date().toISOString(),
+      },
+      {
+        id: crypto.randomUUID(),
+        title: 'Daily Meditation',
+        category: 'Personal',
+        color: '#f59e0b',
+        targetDaysPerWeek: 7,
+        completedDates: [d(-1), d(-2), d(-3), d(-4)],
+        createdAt: new Date().toISOString(),
+      },
+    ];
+    try { localStorage.setItem(HABITS_KEY, JSON.stringify(sample)); } catch {}
+    return sample;
   }
 }
 

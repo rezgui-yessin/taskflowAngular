@@ -42,6 +42,15 @@ type View = 'list' | 'board';
             <option value="all">All priorities</option>
             <option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option>
           </select>
+          <!-- Tag filter -->
+          @if (store.tags().length) {
+            <select class="select select-sm" [ngModel]="tagFilter()" (ngModelChange)="tagFilter.set($event)" aria-label="Filter by tag">
+              <option value="">All tags</option>
+              @for (tag of store.tags(); track tag.id) {
+                <option [value]="tag.id">{{ tag.label }}</option>
+              }
+            </select>
+          }
           <div class="seg">
             <button class="seg-btn" [class.active]="view() === 'list'" (click)="view.set('list')" aria-label="List view"><app-icon name="list" [size]="16" />List</button>
             <button class="seg-btn" [class.active]="view() === 'board'" (click)="view.set('board')" aria-label="Board view"><app-icon name="board" [size]="16" />Board</button>
@@ -49,18 +58,44 @@ type View = 'list' | 'board';
         </div>
       </div>
 
+      <!-- Bulk action bar -->
+      @if (selectionMode()) {
+        <div class="bulk-bar">
+          <label class="bulk-check">
+            <input type="checkbox" [checked]="allSelected()" (change)="toggleSelectAll()" />
+            <span>{{ selectedIds().size }} selected</span>
+          </label>
+          <span class="spacer"></span>
+          <button class="btn btn-sm" (click)="bulkComplete()" [disabled]="!selectedIds().size"><app-icon name="check" [size]="14" />Mark done</button>
+          <button class="btn btn-sm" (click)="bulkUncomplete()" [disabled]="!selectedIds().size"><app-icon name="x" [size]="14" />Mark todo</button>
+          <button class="btn btn-sm btn-danger" (click)="bulkDelete()" [disabled]="!selectedIds().size"><app-icon name="trash" [size]="14" />Delete</button>
+          <button class="btn btn-sm btn-ghost" (click)="exitSelection()">Cancel</button>
+        </div>
+      } @else {
+        <div class="bulk-hint">
+          <button class="btn btn-sm btn-ghost" (click)="enterSelection()"><app-icon name="check-square" [size]="15" />Select tasks</button>
+        </div>
+      }
+
       @if (view() === 'list') {
         @for (g of groups(); track g.date) {
           <div class="group">
             <h3 class="group-title" [class.late]="g.late">{{ g.label }} <span class="faint">{{ g.tasks.length }}</span></h3>
             <div class="list">
-              @for (t of g.tasks; track t.id) { <app-task-item [task]="t" /> }
+              @for (t of g.tasks; track t.id) {
+                <app-task-item
+                  [task]="t"
+                  [selectionMode]="selectionMode()"
+                  [selected]="selectedIds().has(t.id)"
+                  (selectionToggle)="toggleSelect($event)"
+                />
+              }
             </div>
           </div>
         } @empty {
           <div class="card empty">
             <div class="empty-ic"><app-icon name="sparkle" /></div>
-            <strong>{{ query() || priority() !== 'all' ? 'No tasks match your filters' : 'No tasks in this period' }}</strong>
+            <strong>{{ query() || priority() !== 'all' || tagFilter() ? 'No tasks match your filters' : 'No tasks in this period' }}</strong>
             <span>Create a task to get started.</span>
             <button class="btn btn-primary btn-sm" (click)="form.openNew()">Add a task</button>
           </div>
@@ -76,12 +111,23 @@ type View = 'list' | 'board';
               <div class="col-head"><strong>{{ col.label }}</strong><span class="count">{{ board()[col.value].length }}</span></div>
               <div class="col-body">
                 @for (t of board()[col.value]; track t.id) {
-                  <article class="kcard" draggable="true" (dragstart)="drag($event, t)" (dragend)="dragOver.set(null)" (click)="form.openEdit(t)" tabindex="0" (keydown.enter)="form.openEdit(t)">
+                  <article class="kcard" [class.kblocked]="store.isBlocked(t)" draggable="true" (dragstart)="drag($event, t)" (dragend)="dragOver.set(null)" (click)="form.openEdit(t)" tabindex="0" (keydown.enter)="form.openEdit(t)">
                     <div class="kt">{{ t.title }}</div>
                     <div class="km">
                       <span class="badge" [attr.data-p]="t.priority">{{ t.priority }}</span>
                       <span class="faint">{{ day(t.dueDate) }}{{ t.dueTime ? ', ' + t.dueTime : '' }}</span>
                     </div>
+                    <!-- Tags on board card -->
+                    @if (store.tagsFor(t).length) {
+                      <div class="ktags">
+                        @for (tag of store.tagsFor(t); track tag.id) {
+                          <span class="ktag" [style.background]="tag.color + '22'" [style.color]="tag.color">{{ tag.label }}</span>
+                        }
+                      </div>
+                    }
+                    @if (store.isBlocked(t)) {
+                      <div class="kblocked-label">🔒 blocked</div>
+                    }
                   </article>
                 } @empty { <div class="drop-hint">Drop tasks here</div> }
               </div>
@@ -109,7 +155,12 @@ export class TasksComponent {
   protected readonly view = signal<View>('list');
   protected readonly query = signal('');
   protected readonly priority = signal<Priority | 'all'>('all');
+  protected readonly tagFilter = signal<string>('');
   protected readonly dragOver = signal<Status | null>(null);
+
+  // Bulk selection
+  protected readonly selectionMode = signal(false);
+  protected readonly selectedIds = signal<Set<string>>(new Set());
 
   private ref = () => fromISO(this.store.today());
 
@@ -134,12 +185,16 @@ export class TasksComponent {
   private readonly filtered = computed(() => {
     const q = this.query().trim().toLowerCase();
     const p = this.priority();
+    const tf = this.tagFilter();
     const base = this.store.forPeriod(this.period(), this.ref());
-    // Overdue open tasks always show up in "Today" so nothing is forgotten.
     const extra = this.period() === 'today' ? this.store.overdue() : [];
     return [...extra, ...base]
       .filter((t, i, arr) => arr.findIndex((x) => x.id === t.id) === i)
-      .filter((t) => (p === 'all' || t.priority === p) && (!q || (t.title + t.notes + t.category).toLowerCase().includes(q)));
+      .filter((t) =>
+        (p === 'all' || t.priority === p) &&
+        (!q || (t.title + t.notes + t.category).toLowerCase().includes(q)) &&
+        (!tf || (t.tagIds ?? []).includes(tf))
+      );
   });
 
   protected readonly groups = computed(() => {
@@ -163,8 +218,55 @@ export class TasksComponent {
 
   protected readonly doneCount = computed(() => this.store.tasks().filter((t) => t.status === 'done').length);
 
+  protected readonly allSelected = computed(() => {
+    const visible = this.filtered().map((t) => t.id);
+    return visible.length > 0 && visible.every((id) => this.selectedIds().has(id));
+  });
+
   protected day(iso: string): string { return relativeDay(iso, this.store.today()); }
 
+  // --- bulk selection ---
+  protected enterSelection(): void { this.selectionMode.set(true); }
+  protected exitSelection(): void { this.selectionMode.set(false); this.selectedIds.set(new Set()); }
+
+  protected toggleSelect(id: string): void {
+    this.selectedIds.update((set) => {
+      const next = new Set(set);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
+
+  protected toggleSelectAll(): void {
+    if (this.allSelected()) {
+      this.selectedIds.set(new Set());
+    } else {
+      this.selectedIds.set(new Set(this.filtered().map((t) => t.id)));
+    }
+  }
+
+  protected bulkComplete(): void {
+    const ids = [...this.selectedIds()];
+    this.store.setStatusMany(ids, 'done');
+    this.toast.show(`${ids.length} task${ids.length !== 1 ? 's' : ''} marked as done`);
+    this.exitSelection();
+  }
+
+  protected bulkUncomplete(): void {
+    const ids = [...this.selectedIds()];
+    this.store.setStatusMany(ids, 'todo');
+    this.toast.show(`${ids.length} task${ids.length !== 1 ? 's' : ''} moved to To Do`);
+    this.exitSelection();
+  }
+
+  protected bulkDelete(): void {
+    const ids = [...this.selectedIds()];
+    const n = this.store.removeMany(ids);
+    this.toast.show(`${n} task${n !== 1 ? 's' : ''} deleted`, { type: 'info' });
+    this.exitSelection();
+  }
+
+  // --- drag & drop ---
   protected drag(e: DragEvent, t: Task): void {
     e.dataTransfer?.setData('text/plain', t.id);
     if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';

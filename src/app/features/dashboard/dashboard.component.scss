@@ -22,6 +22,25 @@
 .rem-ic { flex: none; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 10px; background: var(--accent-soft); color: var(--accent); }
 .rem-main { min-width: 0; font-size: .82rem; } .rem-t { font-weight: 650; font-size: .92rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+.habit-mini-list {
+  display: flex; flex-direction: column; gap: 8px;
+}
+.habit-mini-item {
+  display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 10px;
+  background: var(--surface-2); cursor: pointer; transition: background .15s;
+  &:hover { background: var(--surface-3); }
+}
+.day-check-mini {
+  width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--border);
+  display: grid; place-items: center; color: #fff; flex: none; transition: all .15s;
+  &.checked { background: var(--c, var(--accent)); border-color: var(--c, var(--accent)); }
+}
+.habit-mini-title {
+  flex: 1; font-size: .88rem; font-weight: 600; color: var(--text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  &.done-t { text-decoration: line-through; color: var(--text-3); }
+}
+
 @media (max-width: 1080px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .hero { grid-column: 1 / -1; } .cols { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 520px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; } .hero { gap: 14px; } .kpis > :last-child { grid-column: 1 / -1; } .hero { flex-direction: row; } h1 { font-size: 1.45rem; } }
 

@@ -19,6 +19,11 @@ export const routes: Routes = [
         loadComponent: () => import('./features/tasks/tasks.component').then((m) => m.TasksComponent),
       },
       {
+        path: 'habits',
+        title: 'Habits · TaskFlow',
+        loadComponent: () => import('./features/habits/habits.component').then((m) => m.HabitsComponent),
+      },
+      {
         path: 'calendar',
         title: 'Calendar · TaskFlow',
         loadComponent: () =>

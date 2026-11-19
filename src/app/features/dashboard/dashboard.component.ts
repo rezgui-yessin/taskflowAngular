@@ -98,6 +98,28 @@ import { fromISO } from '../../core/utils/date.utils';
               } @empty { <p class="muted">No upcoming reminders.</p> }
             </div>
           </div>
+
+          <div class="card">
+            <div class="card-head">
+              <h2><app-icon name="flame" [size]="16" /> Habits today</h2>
+              <a routerLink="/habits">Track all</a>
+            </div>
+            <div class="habit-mini-list">
+              @for (h of store.habits(); track h.id) {
+                <div class="habit-mini-item" (click)="store.toggleHabitDay(h.id, store.today())">
+                  <span class="day-check-mini" [class.checked]="h.completedDates.includes(store.today())" [style.--c]="h.color">
+                    @if (h.completedDates.includes(store.today())) {
+                      <app-icon name="check" [size]="12" [stroke]="3" />
+                    }
+                  </span>
+                  <span class="habit-mini-title" [class.done-t]="h.completedDates.includes(store.today())">{{ h.title }}</span>
+                  <span class="faint" style="font-size:.74rem">🔥 {{ store.habitStreak(h) }}d</span>
+                </div>
+              } @empty {
+                <p class="muted">No habits yet. <a routerLink="/habits">Add one!</a></p>
+              }
+            </div>
+          </div>
         </div>
       </div>
     </section>

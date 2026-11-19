@@ -5,12 +5,33 @@ import {
   addDays, addMonths, endOfMonth, endOfWeek, fromISO, monthShort, startOfMonth, startOfWeek, toISO, weekdayShort,
 } from '../utils/date.utils';
 
-export interface Summary { total: number; done: number; pct: number; }
-export interface Bucket { label: string; total: number; done: number; pct: number; isCurrent: boolean; }
+export interface Summary { total: number; done: number; pct: number; minutesSpent: number; }
+export interface Bucket { label: string; total: number; done: number; pct: number; isCurrent: boolean; minutesSpent: number; }
+
+export interface WeeklyReview {
+  startDate: string;
+  endDate: string;
+  tasksPlanned: number;
+  tasksCompleted: number;
+  completionRate: number;
+  totalMinutesSpent: number;
+  topCategory: { name: string; count: number; pct: number } | null;
+  productivityScore: number;
+  grade: 'A+' | 'A' | 'B' | 'C' | 'Keep going';
+  highlights: Task[];
+  pendingTasks: Task[];
+  digestText: string;
+}
 
 const summarize = (tasks: Task[]): Summary => {
   const done = tasks.filter((t) => t.status === 'done').length;
-  return { total: tasks.length, done, pct: tasks.length ? Math.round((done / tasks.length) * 100) : 0 };
+  const minutesSpent = tasks.reduce((acc, t) => acc + (t.timeSpentMinutes ?? 0), 0);
+  return {
+    total: tasks.length,
+    done,
+    pct: tasks.length ? Math.round((done / tasks.length) * 100) : 0,
+    minutesSpent,
+  };
 };
 
 @Injectable({ providedIn: 'root' })
@@ -29,6 +50,11 @@ export class StatsService {
   readonly month = computed<Summary>(() => {
     const ref = fromISO(this.store.today());
     return summarize(this.range(startOfMonth(ref), endOfMonth(ref)));
+  });
+
+  /** Total minutes tracked across all tasks */
+  readonly totalMinutesTracked = computed(() => {
+    return this.store.tasks().reduce((acc, t) => acc + (t.timeSpentMinutes ?? 0), 0);
   });
 
   /** Last 7 days, ending today. */
@@ -81,5 +107,74 @@ export class StatsService {
       map.set(name, summarize(tasks.filter((t) => t.category === name)));
     }
     return [...map.entries()].map(([name, s]) => ({ name, ...s })).sort((a, b) => b.total - a.total);
+  });
+
+  /** Auto-generated Weekly Digest Summary */
+  readonly weeklyReview = computed<WeeklyReview>(() => {
+    const ref = fromISO(this.store.today());
+    const start = startOfWeek(ref);
+    const end = endOfWeek(ref);
+    const weekTasks = this.range(start, end);
+
+    const completed = weekTasks.filter((t) => t.status === 'done');
+    const pending = weekTasks.filter((t) => t.status !== 'done');
+    const planned = weekTasks.length;
+    const completedCount = completed.length;
+    const rate = planned ? Math.round((completedCount / planned) * 100) : 0;
+    const totalMinutes = weekTasks.reduce((acc, t) => acc + (t.timeSpentMinutes ?? 0), 0);
+
+    // Category breakdown for the week
+    const catCounts = new Map<string, number>();
+    for (const t of completed) {
+      catCounts.set(t.category, (catCounts.get(t.category) ?? 0) + 1);
+    }
+    let topCategory: { name: string; count: number; pct: number } | null = null;
+    if (completed.length > 0) {
+      const sortedCats = [...catCounts.entries()].sort((a, b) => b[1] - a[1]);
+      if (sortedCats.length) {
+        const [name, count] = sortedCats[0];
+        topCategory = { name, count, pct: Math.round((count / completed.length) * 100) };
+      }
+    }
+
+    // Productivity score (weighted between completion rate and consistency)
+    const currentStreak = this.streak();
+    const streakBonus = Math.min(20, currentStreak * 4);
+    const productivityScore = Math.min(100, Math.round(rate * 0.8 + streakBonus));
+
+    let grade: 'A+' | 'A' | 'B' | 'C' | 'Keep going' = 'Keep going';
+    if (productivityScore >= 95) grade = 'A+';
+    else if (productivityScore >= 80) grade = 'A';
+    else if (productivityScore >= 65) grade = 'B';
+    else if (productivityScore >= 50) grade = 'C';
+
+    const sDate = `${start.getDate()} ${monthShort(start)}`;
+    const eDate = `${end.getDate()} ${monthShort(end)}`;
+
+    const digestLines = [
+      `📊 Weekly Review (${sDate} – ${eDate})`,
+      `🏆 Score: ${productivityScore}% (Grade: ${grade})`,
+      `✅ Completed: ${completedCount}/${planned} tasks (${rate}%)`,
+      `⏱ Time Tracked: ${Math.floor(totalMinutes / 60)}h ${totalMinutes % 60}m`,
+      `🔥 Active Streak: ${currentStreak} days`,
+      topCategory ? `🎯 Top Focus: ${topCategory.name} (${topCategory.pct}% of completed tasks)` : '',
+      completed.length ? `\nTop Accomplishments:\n` + completed.slice(0, 5).map((t) => `• ${t.title}`).join('\n') : '',
+      pending.length ? `\nCarried Over to Next Week:\n` + pending.slice(0, 3).map((t) => `• ${t.title}`).join('\n') : '',
+    ].filter(Boolean);
+
+    return {
+      startDate: sDate,
+      endDate: eDate,
+      tasksPlanned: planned,
+      tasksCompleted: completedCount,
+      completionRate: rate,
+      totalMinutesSpent: totalMinutes,
+      topCategory,
+      productivityScore,
+      grade,
+      highlights: completed.slice(0, 5),
+      pendingTasks: pending.slice(0, 5),
+      digestText: digestLines.join('\n'),
+    };
   });
 }

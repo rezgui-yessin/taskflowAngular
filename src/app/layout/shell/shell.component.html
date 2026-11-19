@@ -34,6 +34,81 @@
         <strong>{{ store.today() | date: 'EEEE, d MMMM' }}</strong>
       </div>
       <div class="tools">
+        <!-- Pomodoro Focus Timer -->
+        <div class="pomo-wrap">
+          <button type="button" class="btn btn-sm pomo-btn" [class.running]="pomodoro.isRunning()" (click)="pomodoro.toggleOpen()" aria-label="Pomodoro Focus Timer">
+            <app-icon name="timer" [size]="16" />
+            <span class="pomo-time">{{ pomodoro.displayTime() }}</span>
+            @if (pomodoro.activeTask(); as at) {
+              <span class="pomo-dot" [title]="'Tracking: ' + at.title"></span>
+            }
+          </button>
+
+          @if (pomodoro.isOpen()) {
+            <div class="panel pomo-panel" role="dialog" aria-label="Pomodoro Focus Timer">
+              <div class="panel-head">
+                <div style="display:flex;align-items:center;gap:6px">
+                  <app-icon name="timer" [size]="16" />
+                  <strong>Focus Timer</strong>
+                </div>
+                <button type="button" class="btn btn-icon btn-sm" (click)="pomodoro.close()"><app-icon name="x" [size]="14" /></button>
+              </div>
+
+              <div class="pomo-body">
+                <div class="seg" style="width:100%;display:grid;grid-template-columns:1fr 1fr 1fr;text-align:center">
+                  <button type="button" class="seg-btn" [class.active]="pomodoro.mode() === 'focus'" (click)="pomodoro.setMode('focus')">Focus</button>
+                  <button type="button" class="seg-btn" [class.active]="pomodoro.mode() === 'shortBreak'" (click)="pomodoro.setMode('shortBreak')">Short</button>
+                  <button type="button" class="seg-btn" [class.active]="pomodoro.mode() === 'longBreak'" (click)="pomodoro.setMode('longBreak')">Long</button>
+                </div>
+
+                <div class="pomo-clock">
+                  <div class="pomo-digits">{{ pomodoro.displayTime() }}</div>
+                  <div class="pomo-status">{{ pomodoro.isRunning() ? 'Session in progress…' : (pomodoro.mode() === 'focus' ? 'Ready to focus' : 'Enjoy your break') }}</div>
+                  <div class="pomo-bar-track">
+                    <div class="pomo-bar-fill" [style.width.%]="pomodoro.progressPct()"></div>
+                  </div>
+                </div>
+
+                <div class="field" style="margin-top:6px">
+                  <label class="label" style="font-size:.76rem">Active Task (Logs focus time)</label>
+                  <select class="select select-sm" [ngModel]="pomodoro.activeTaskId()" (ngModelChange)="pomodoro.activeTaskId.set($event)">
+                    <option [ngValue]="null">None (General focus)</option>
+                    @for (t of store.open(); track t.id) {
+                      <option [value]="t.id">{{ t.title }} ({{ t.timeSpentMinutes || 0 }}m logged)</option>
+                    }
+                  </select>
+                </div>
+
+                @if (pomodoro.mode() === 'focus') {
+                  <div class="pomo-presets">
+                    <span class="faint" style="font-size:.74rem">Duration:</span>
+                    <button type="button" class="pomo-preset-btn" [class.on]="pomodoro.config().focusMinutes === 15" (click)="pomodoro.setFocusDuration(15)">15m</button>
+                    <button type="button" class="pomo-preset-btn" [class.on]="pomodoro.config().focusMinutes === 25" (click)="pomodoro.setFocusDuration(25)">25m</button>
+                    <button type="button" class="pomo-preset-btn" [class.on]="pomodoro.config().focusMinutes === 50" (click)="pomodoro.setFocusDuration(50)">50m</button>
+                  </div>
+                }
+
+                <div class="pomo-ctrls">
+                  <button type="button" class="btn btn-sm" (click)="pomodoro.reset()" title="Reset timer">
+                    <app-icon name="rotate" [size]="15" />
+                  </button>
+                  <button type="button" class="btn btn-sm btn-primary pomo-main-btn" (click)="pomodoro.toggleStart()">
+                    <app-icon [name]="pomodoro.isRunning() ? 'pause' : 'play'" [size]="15" />
+                    {{ pomodoro.isRunning() ? 'Pause' : 'Start focus' }}
+                  </button>
+                  <button type="button" class="btn btn-sm" (click)="pomodoro.skip()" title="Skip / Finish session">
+                    Skip
+                  </button>
+                </div>
+
+                <div class="pomo-foot">
+                  <span>Sessions completed today: <strong>{{ pomodoro.completedSessions() }}</strong></span>
+                </div>
+              </div>
+            </div>
+          }
+        </div>
+
         <a class="btn btn-icon only-mobile" routerLink="/settings" routerLinkActive="active" aria-label="Settings"><app-icon name="settings" /></a>
         <button class="btn btn-icon" (click)="settings.toggleTheme()" [attr.aria-label]="isDark() ? 'Switch to light theme' : 'Switch to dark theme'">
           <app-icon [name]="isDark() ? 'sun' : 'moon'" />
@@ -79,11 +154,11 @@
   </div>
 
   <nav class="mobile-nav" aria-label="Main">
-    @for (n of nav.slice(0, 2); track n.path) {
+    @for (n of nav.slice(0, 3); track n.path) {
       <a [routerLink]="n.path" routerLinkActive="active"><app-icon [name]="n.icon" /><span>{{ n.label }}</span></a>
     }
     <button class="fab" (click)="form.openNew()" aria-label="New task"><app-icon name="plus" [size]="24" [stroke]="2.5" /></button>
-    @for (n of nav.slice(2, 4); track n.path) {
+    @for (n of nav.slice(3, 6); track n.path) {
       <a [routerLink]="n.path" routerLinkActive="active"><app-icon [name]="n.icon" /><span>{{ n.label }}</span></a>
     }
   </nav>
